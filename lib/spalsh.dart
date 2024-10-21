@@ -1,4 +1,5 @@
 import 'package:chatapp/login.dart';
+import 'package:chatapp/signup.dart';
 import 'package:flutter/material.dart';
 
 class spalsh extends StatelessWidget {
@@ -88,7 +89,7 @@ class spalsh extends StatelessWidget {
               onPressed: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) =>  LoginScreen()),
+                  MaterialPageRoute(builder: (context) =>  SignupScreen()),
                 );
                 // Handle button press
               },
