@@ -38,6 +38,9 @@ dependencies:
   cloud_firestore: ^4.14.0
   firebase_auth: ^4.16.0
   firebase_core: ^2.24.2
+  flutter_contacts: ^1.1.9+2
+  permission_handler: ^11.0.1
+  contacts_service: ^0.6.1
 
 dev_dependencies:
   flutter_test:

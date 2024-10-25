@@ -89,7 +89,7 @@ class spalsh extends StatelessWidget {
               onPressed: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) =>  SignupScreen()),
+                  MaterialPageRoute(builder: (context) =>  LoginScreen()),
                 );
                 // Handle button press
               },

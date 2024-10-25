@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'OTP.dart';
+
+import 'messagelist.dart'; // Import Firestore
 
 class SignupScreen extends StatefulWidget {
   @override
@@ -10,172 +11,85 @@ class SignupScreen extends StatefulWidget {
 
 class _SignupScreenState extends State<SignupScreen> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance; // Firestore instance
   final TextEditingController _phoneNumberController = TextEditingController();
   final TextEditingController _usernameController = TextEditingController();
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
 
-  late String verificationId;
-
   void _signUp() async {
     if (_formKey.currentState!.validate()) {
       String phoneNumber = _phoneNumberController.text.trim();
+      String username = _usernameController.text.trim();
 
-      await _auth.verifyPhoneNumber(
-        phoneNumber: phoneNumber,
-        timeout: const Duration(seconds: 60),
-        verificationCompleted: (PhoneAuthCredential credential) async {
-          // Automatic OTP verification completed
-        },
-        verificationFailed: (FirebaseAuthException e) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text("Verification Failed: ${e.message}"),
-          ));
-        },
-        codeSent: (String verId, int? resendToken) {
-          setState(() {
-            verificationId = verId;
-          });
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => OtpScreen(
-                verificationId: verificationId,
-                phoneNumber: phoneNumber,
-                username: _usernameController.text.trim(),
-              ),
-            ),
-          );
-        },
-        codeAutoRetrievalTimeout: (String verId) {
-          setState(() {
-            verificationId = verId;
-          });
-        },
-      );
+      // Create a new user in Firebase Authentication
+      try {
+        UserCredential userCredential = await _auth.signInAnonymously(); // Sign in anonymously to get User ID
+        String userId = userCredential.user!.uid; // Get User ID
+
+        // Store user information in Firestore
+        await _firestore.collection('Users').doc(userId).set({
+          'username': username,
+          'phone_number': phoneNumber,
+          'user_id': userId,
+        });
+
+        // Navigate to ChatScreen after successful signup
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => ChatScreen()),
+        );
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Sign up failed: ${e.toString()}")),
+        );
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Color(0xFF6200EE), Color(0xFF9C27B0)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
-        child: SingleChildScrollView(
+      body: SingleChildScrollView(
+        child: Container(
           padding: EdgeInsets.all(24.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              SizedBox(height: 80),
-              Text(
-                'Create an Account',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 32,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              SizedBox(height: 40),
-              Form(
-                key: _formKey,
-                child: Column(
-                  children: [
-                    _buildTextInput(
-                      controller: _usernameController,
-                      label: 'Username',
-                      icon: Icons.person,
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Please enter a username';
-                        }
-                        return null;
-                      },
-                    ),
-                    SizedBox(height: 20),
-                    _buildTextInput(
-                      controller: _phoneNumberController,
-                      label: 'Phone Number',
-                      icon: Icons.phone,
-                      keyboardType: TextInputType.phone,
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Please enter a phone number';
-                        }
-                        return null;
-                      },
-                    ),
-                    SizedBox(height: 40),
-                    ElevatedButton(
-                      onPressed: _signUp,
-                      style: ElevatedButton.styleFrom(
-                        primary: Colors.white,
-                        padding: EdgeInsets.symmetric(vertical: 15, horizontal: 100),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(30),
-                        ),
-                        elevation: 5,
-                      ),
-                      child: Text(
-                        'Sign Up',
-                        style: TextStyle(
-                          color: Color(0xFF6200EE),
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+          child: Form(
+            key: _formKey,
+            child: Column(
+              children: [
+                const SizedBox(height: 70),
+                Image.asset("assets/images/talk.jpeg"),
+                const SizedBox(height: 20),
+                Text("Let's Chat Together ! ", style: TextStyle(fontStyle: FontStyle.italic, fontSize: 20),),
+                const SizedBox(height: 35),
 
-  Widget _buildTextInput({
-    required TextEditingController controller,
-    required String label,
-    required IconData icon,
-    TextInputType keyboardType = TextInputType.text,
-    required String? Function(String?) validator,
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(30),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
-      child: TextFormField(
-        controller: controller,
-        keyboardType: keyboardType,
-        validator: validator,
-        decoration: InputDecoration(
-          prefixIcon: Icon(icon, color: Colors.white),
-          labelText: label,
-          labelStyle: TextStyle(color: Colors.white),
-          filled: true,
-          fillColor: Colors.white.withOpacity(0.2),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(30),
-            borderSide: BorderSide.none,
+                TextFormField(
+                  controller: _usernameController,
+                  decoration: InputDecoration(labelText: "Username"),
+                  validator: (value) => value!.isEmpty ? "Please enter a username" : null,
+                ),
+                TextFormField(
+                  controller: _phoneNumberController,
+                  decoration: InputDecoration(
+                    labelText: "Phone Number",
+                    hintText: "+92 3XX XXXXXXX",
+                  ),
+                  keyboardType: TextInputType.phone,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return "Please enter a phone number";
+                    }
+                    return null;
+                  },
+                ),
+                SizedBox(height: 20),
+                ElevatedButton(
+                  onPressed: _signUp,
+                  child: Text("Sign Up"),
+                ),
+              ],
+            ),
           ),
         ),
-        style: TextStyle(color: Colors.white),
       ),
     );
   }

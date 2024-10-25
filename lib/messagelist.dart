@@ -1,12 +1,50 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:contacts_service/contacts_service.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'chatdetail.dart';
 
-class ChatScreen extends StatelessWidget {
-  // Firebase references
+class ChatScreen extends StatefulWidget {
+  @override
+  _ChatScreenState createState() => _ChatScreenState();
+}
+
+class _ChatScreenState extends State<ChatScreen> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  Future<void> requestContactPermission() async {
+    PermissionStatus status = await Permission.contacts.status;
+    if (!status.isGranted) {
+      await Permission.contacts.request();
+    }
+  }
+
+  Future<List<Contact>> getPhoneContacts() async {
+    await requestContactPermission(); // Request permission before accessing contacts
+    return await ContactsService.getContacts();
+  }
+
+  Future<List<Contact>> getRegisteredContacts() async {
+    // Get all phone contacts
+    List<Contact> phoneContacts = await getPhoneContacts();
+
+    // Get registered users from Firebase
+    QuerySnapshot userSnapshot = await _firestore.collection('users').get();
+
+    // Get phone numbers from Firebase users
+    List<String> registeredPhoneNumbers = userSnapshot.docs.map((doc) {
+      return doc['phoneNumber'].toString(); // Assuming phoneNumber is stored as a string
+    }).toList();
+
+    // Filter contacts that are registered in the app
+    List<Contact> registeredContacts = phoneContacts.where((contact) {
+      return contact.phones!.any((phone) => registeredPhoneNumbers.contains(phone.value));
+    }).toList();
+
+    return registeredContacts;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -19,20 +57,66 @@ class ChatScreen extends StatelessWidget {
         actions: [
           IconButton(
             icon: Icon(Icons.add, color: Colors.white),  // New Message button
-            onPressed: () {
-              // TODO: Show all contacts saved in mobile phone and check Firebase
+            onPressed: () async {
+              // Show all contacts saved in the phone and check Firebase
+              List<Contact> registeredContacts = await getRegisteredContacts();
+
+              // Show them in a new screen
+              showModalBottomSheet(
+                context: context,
+                builder: (context) {
+                  return Container(
+                    padding: EdgeInsets.all(16),
+                    child: ListView.builder(
+                      itemCount: registeredContacts.length,
+                      itemBuilder: (context, index) {
+                        final contact = registeredContacts[index];
+                        return ListTile(
+                          title: Text(contact.displayName ?? 'Unknown'),
+                          subtitle: Text(contact.phones!.isNotEmpty
+                              ? contact.phones!.first.value ?? 'No number'
+                              : 'No number'),
+                          onTap: () {
+                            // Open a chat with this user
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => ChatDetailScreen(
+                                  userName: contact.displayName ?? 'Unknown',
+                                  phoneNumber: contact.phones!.isNotEmpty
+                                      ? contact.phones!.first.value ?? 'No number'
+                                      : 'No number',
+                                  isActive: true,
+                                  latestMessage: '',
+                                ),
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  );
+                },
+              );
             },
           ),
         ],
       ),
       body: StreamBuilder(
         stream: _firestore.collection('chats').snapshots(),  // Fetch chats from Firebase
-        builder: (context, snapshot) {
+        builder: (context, AsyncSnapshot<QuerySnapshot> snapshot) {
           if (!snapshot.hasData) {
             return Center(child: CircularProgressIndicator());
           }
 
-          var chats = snapshot.data.docs;
+          // Ensure snapshot.data is not null
+          if (snapshot.data == null || snapshot.data!.docs.isEmpty) {
+            return Center(
+              child: Text('No chats available', style: TextStyle(color: Colors.white)),
+            );
+          }
+
+          var chats = snapshot.data!.docs;  // Safely accessing the 'docs' property
 
           // Sort chats by timestamp (latest at the top)
           chats.sort((a, b) => b['timestamp'].compareTo(a['timestamp']));
@@ -149,11 +233,13 @@ class ChatScreen extends StatelessWidget {
                           style: TextStyle(color: Colors.white),
                         ),
                         subtitle: Text(
-                          chat['latestMessage'],  // Show the latest message
+                          chat['latestMessage'],
                           style: TextStyle(color: Colors.grey),
                         ),
                         trailing: Text(
-                          chat['time'],  // Show message time
+                          chat['timestamp'] != null
+                              ? (chat['timestamp'] as Timestamp).toDate().toString()
+                              : '',
                           style: TextStyle(color: Colors.grey),
                         ),
                         onTap: () {

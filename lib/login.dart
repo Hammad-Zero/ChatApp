@@ -1,7 +1,83 @@
-import 'package:chatapp/messagelist.dart';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'OTP.dart';
+import 'signup.dart'; // Import Signup screen
 
-class LoginScreen extends StatelessWidget {
+class LoginScreen extends StatefulWidget {
+  @override
+  _LoginScreenState createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
+  final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _usernameController = TextEditingController();
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+
+  String? _verificationId;
+  bool _isLoading = false; // Loading state
+
+  void _sendOtp() async {
+    String phoneNumber = _phoneController.text.trim();
+    String username = _usernameController.text.trim();
+
+    // Validate input
+    if (phoneNumber.isEmpty || username.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Please enter both username and phone number.")),
+      );
+      return;
+    }
+
+    setState(() {
+      _isLoading = true; // Start loading
+    });
+
+    // Initiate OTP sending
+    await _auth.verifyPhoneNumber(
+      phoneNumber: phoneNumber,
+      timeout: const Duration(seconds: 60),
+      verificationCompleted: (PhoneAuthCredential credential) async {
+        // Auto-sign-in for instant verification cases
+        await _auth.signInWithCredential(credential);
+      },
+      verificationFailed: (FirebaseAuthException e) {
+        setState(() {
+          _isLoading = false; // Stop loading
+        });
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("OTP verification failed. Please try again."),
+        ));
+      },
+      codeSent: (String verificationId, int? resendToken) {
+        // Save the verification ID to use later
+        setState(() {
+          _verificationId = verificationId;
+          _isLoading = false; // Stop loading
+        });
+
+        // Navigate to OTP screen to verify the code
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => OtpScreen(
+              verificationId: verificationId,
+              phoneNumber: phoneNumber,
+              username: username,
+              isSigningUp: false,
+            ),
+          ),
+        );
+      },
+      codeAutoRetrievalTimeout: (String verificationId) {
+        // Timeout for OTP auto retrieval
+        setState(() {
+          _verificationId = verificationId;
+          _isLoading = false; // Stop loading
+        });
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -22,7 +98,6 @@ class LoginScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Heading Text
               const Text(
                 'Hello, Welcome Back',
                 style: TextStyle(
@@ -31,142 +106,80 @@ class LoginScreen extends StatelessWidget {
                   color: Colors.black,
                 ),
               ),
-              const SizedBox(height: 8),
-
-              // Subtitle Text
-              Text(
-                'Happy to see you again, to use your account please login first.',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey[600],
-                ),
-              ),
               const SizedBox(height: 24),
-              Image.asset('assets/images/talk.jpeg', width: 300,height: 300, alignment: Alignment.center,),
+              Image.asset("assets/images/talk.jpeg"),
 
-              // Phone Number Field
+              // Username Field
               TextField(
+                controller: _usernameController,
                 decoration: InputDecoration(
                   labelText: 'Username',
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(30),
                   ),
                 ),
-                keyboardType: TextInputType.phone,
+                keyboardType: TextInputType.text,
               ),
               const SizedBox(height: 16),
 
-              // Password Field
+              // Phone Number Field
               TextField(
+                controller: _phoneController,
                 decoration: InputDecoration(
                   labelText: 'Phone Number',
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(30),
                   ),
                 ),
-                obscureText: true,
-              ),
-              const SizedBox(height: 8),
-
-              // Forgot Password Link
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: () {
-                    // Handle OTP
-                  },
-                  child: const Center(
-                    child:  Text(
-                      'Did not received OTP?',
-
-                      style: TextStyle(color: Colors.red,),
-                    ),
-                  ),
-                ),
+                keyboardType: TextInputType.phone,
               ),
               const SizedBox(height: 24),
 
               // Login Button
               Center(
-                child: ElevatedButton(
+                child: _isLoading
+                    ? CircularProgressIndicator() // Show loading indicator
+                    : ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    primary: Colors.purple, // Button color
+                    primary: Colors.purple,
                     padding: const EdgeInsets.symmetric(horizontal: 120, vertical: 20),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(30),
                     ),
                   ),
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) =>  ChatScreen()),
-                    );
-                                      },
+                  onPressed: _sendOtp,
                   child: const Text(
                     'Login',
                     style: TextStyle(fontSize: 18, color: Colors.white),
                   ),
                 ),
               ),
-              const SizedBox(height: 24),
 
-              // Or Login with Text
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Expanded(
-                    child: Divider(
-                      thickness: 1,
-                      color: Colors.grey[400],
+              const SizedBox(height: 6),
+              Center(child: Text("or", style: TextStyle(fontSize: 15, fontStyle: FontStyle.italic),)),
+              const SizedBox(height: 1),
+
+              // Signup Button
+              Center(
+                child: TextButton(
+                  onPressed: () {
+                    // Navigate to Signup Screen
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => SignupScreen()),
+                    );
+                  },
+                  child: const Text(
+                    'Signup',
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.purple,
                     ),
                   ),
-              //     Padding(
-              //       padding: const EdgeInsets.symmetric(horizontal: 8.0),
-              //       child: Text('Or Login with'),
-              //     ),
-              //     Expanded(
-              //       child: Divider(
-              //         thickness: 1,
-              //         color: Colors.grey[400],
-              //       ),
-              //     ),
-              //   ],
-              // ),
-              // SizedBox(height: 16),
-
-              // Social Media Icons Row
-              // Row(
-              //   mainAxisAlignment: MainAxisAlignment.center,
-              //   children: [
-              //     IconButton(
-              //       icon: Image.asset('assets/icons/google.png'),
-              //       iconSize: 40,
-              //       onPressed: () {
-              //         // Handle Google login
-              //       },
-              //     ),
-              //     // SizedBox(width: 16),
-              //     // IconButton(
-              //     //   icon: Image.asset('assets/icons/apple.png'),
-              //     //   iconSize: 40,
-              //     //   onPressed: () {
-              //     //     // Handle Apple login
-              //     //   },
-              //     // ),
-              //     // SizedBox(width: 16),
-              //     // IconButton(
-              //     //   icon: Image.asset('assets/icons/facebook.png'),
-              //     //   iconSize: 40,
-              //     //   onPressed: () {
-              //     //     // Handle Facebook login
-              //     //   },
-              //     // ),
-              //   ],
-              // ),
+                ),
+              ),
             ],
           ),
-  ],
-        ),
         ),
       ),
     );
